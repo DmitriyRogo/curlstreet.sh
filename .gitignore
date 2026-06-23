@@ -1,0 +1,20 @@
+# Secrets — never commit
+.env
+
+# Project-specific exclusions
+.kiro/
+CLAUDE.md
+
+# Rapid property-test failure artifacts
+**/testdata/rapid/
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/vendor/
+curlstreet

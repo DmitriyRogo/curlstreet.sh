@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Title}}</title>
+  <style>
+    body {
+      background: #1a1a1a;
+      color: #e0e0e0;
+      font-family: 'Courier New', Courier, monospace;
+      margin: 0;
+      padding: 2rem;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.5;
+    }
+    .curl-examples {
+      margin-top: 2rem;
+      color: #888;
+      font-size: 0.85rem;
+    }
+    .curl-examples code {
+      color: #adf;
+    }
+  </style>
+</head>
+<body>
+  <pre>{{.Body}}</pre>
+  <div class="curl-examples">
+    <p>Try it from your terminal:</p>
+    <pre><code>curl ticker.sh/AAPL
+curl ticker.sh/BTC,ETH
+curl ticker.sh/TSLA?format=json</code></pre>
+  </div>
+</body>
+</html>

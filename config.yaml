@@ -1,0 +1,15 @@
+server:
+  addr: ":8080"
+  read_timeout: 10s
+  write_timeout: 10s
+
+cache:
+  capacity: 1000
+  ttl: 60s
+
+finnhub:
+  api_key: ""
+  timeout: 5s
+
+coingecko:
+  timeout: 5s
