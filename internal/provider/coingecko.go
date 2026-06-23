@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -30,15 +31,16 @@ func NewCoinGeckoWithBase(baseURL string, timeout time.Duration) *CoinGeckoProvi
 }
 
 type coinGeckoMarket struct {
-	ID                     string  `json:"id"`
-	Symbol                 string  `json:"symbol"`
-	Name                   string  `json:"name"`
-	CurrentPrice           float64 `json:"current_price"`
-	PriceChange24h         float64 `json:"price_change_24h"`
-	PriceChangePercentage  float64 `json:"price_change_percentage_24h"`
-	TotalVolume            float64 `json:"total_volume"`
-	High24h                float64 `json:"high_24h"`
-	Low24h                 float64 `json:"low_24h"`
+	ID                    string  `json:"id"`
+	Symbol                string  `json:"symbol"`
+	Name                  string  `json:"name"`
+	CurrentPrice          float64 `json:"current_price"`
+	PriceChange24h        float64 `json:"price_change_24h"`
+	PriceChangePercentage float64 `json:"price_change_percentage_24h"`
+	TotalVolume           float64 `json:"total_volume"`
+	High24h               float64 `json:"high_24h"`
+	Low24h                float64 `json:"low_24h"`
+	MarketCap             float64 `json:"market_cap"`
 }
 
 func (p *CoinGeckoProvider) Fetch(ctx context.Context, symbol string) (*quote.Quote, error) {
@@ -64,7 +66,7 @@ func (p *CoinGeckoProvider) Fetch(ctx context.Context, symbol string) (*quote.Qu
 	}
 
 	var markets []coinGeckoMarket
-	if err := json.NewDecoder(resp.Body).Decode(&markets); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&markets); err != nil {
 		return nil, ErrProviderUnavailable
 	}
 	if len(markets) == 0 {
@@ -75,6 +77,7 @@ func (p *CoinGeckoProvider) Fetch(ctx context.Context, symbol string) (*quote.Qu
 	vol := int64(m.TotalVolume)
 	high := m.High24h
 	low := m.Low24h
+	mcap := int64(m.MarketCap)
 
 	q := &quote.Quote{
 		Symbol:        symbol,
@@ -86,6 +89,7 @@ func (p *CoinGeckoProvider) Fetch(ctx context.Context, symbol string) (*quote.Qu
 		AvgVolume:     nil,
 		High52W:       &high,
 		Low52W:        &low,
+		MarketCap:     &mcap,
 		Currency:      "USD",
 		MarketStatus:  nil,
 		AssetType:     quote.AssetTypeCrypto,
