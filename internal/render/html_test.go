@@ -1,6 +1,7 @@
 package render
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -35,4 +36,12 @@ func TestRenderHTMLHasMonospaceFont(t *testing.T) {
 	out, err := RenderHTML([]quote.QuoteResult{{Quote: q}})
 	require.NoError(t, err)
 	assert.Contains(t, out, "monospace")
+}
+
+func TestRenderError_JSONEscaping(t *testing.T) {
+	msg := `symbol "BTC/USD" not found: path\value`
+	got := RenderError(400, msg, quote.ResponseFormatJSON)
+	var parsed map[string]string
+	require.NoError(t, json.Unmarshal([]byte(got), &parsed), "must be valid JSON: %s", got)
+	assert.Equal(t, msg, parsed["error"])
 }
