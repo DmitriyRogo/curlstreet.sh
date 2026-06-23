@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -229,6 +231,41 @@ func TestFinnhubProvider_URLEncodesAPIKey(t *testing.T) {
 		assert.Contains(t, q, "key%2Bwith%26special%3Dchars",
 			"API key must be URL-encoded in query: %s", q)
 	}
+}
+
+func TestFinnhubProvider_MarketStatusSingleFlight(t *testing.T) {
+	var msCalls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/stock/market-status":
+			msCalls.Add(1)
+			time.Sleep(20 * time.Millisecond) // ensure concurrent requests overlap
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, `{"isOpen":true,"session":"regular"}`)
+		case "/quote":
+			fmt.Fprint(w, `{"c":100,"d":1,"dp":1,"h":101,"l":99,"v":1000}`)
+		case "/stock/profile2":
+			fmt.Fprint(w, `{"name":"Test","currency":"USD"}`)
+		case "/stock/metric":
+			fmt.Fprint(w, `{"metric":{"52WeekHigh":110,"52WeekLow":90}}`)
+		}
+	}))
+	defer srv.Close()
+
+	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			p.Fetch(context.Background(), "AAPL") //nolint:errcheck
+		}()
+	}
+	wg.Wait()
+
+	assert.LessOrEqual(t, int(msCalls.Load()), 2,
+		"concurrent fetches should collapse market-status calls via singleflight")
 }
 
 func TestFinnhubProvider_OversizedBody(t *testing.T) {

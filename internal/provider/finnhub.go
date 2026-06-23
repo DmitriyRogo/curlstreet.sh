@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/singleflight"
+
 	"github.com/dmitriy/curlstreet/internal/quote"
 )
 
@@ -24,6 +26,7 @@ type FinnhubProvider struct {
 
 	msMu    sync.Mutex
 	msCache map[string]marketStatusEntry
+	sf      singleflight.Group
 }
 
 func NewFinnhub(apiKey string, timeout time.Duration) *FinnhubProvider {
@@ -151,19 +154,34 @@ func (p *FinnhubProvider) marketStatus(ctx context.Context, exchange string) str
 	}
 	p.msMu.Unlock()
 
-	status, err := p.fetchMarketStatus(ctx, exchange)
-	if err != nil {
-		return quote.MarketStatusClosed
-	}
+	v, _, _ := p.sf.Do(exchange, func() (any, error) {
+		// Double-check inside the singleflight fence in case another goroutine just populated the cache.
+		p.msMu.Lock()
+		if e, ok := p.msCache[exchange]; ok && time.Now().Before(e.expiresAt) {
+			p.msMu.Unlock()
+			return e.status, nil
+		}
+		p.msMu.Unlock()
 
-	p.msMu.Lock()
-	p.msCache[exchange] = marketStatusEntry{
-		status:    status,
-		expiresAt: time.Now().Add(60 * time.Second),
-	}
-	p.msMu.Unlock()
+		status, err := p.fetchMarketStatus(ctx, exchange)
+		if err != nil {
+			return quote.MarketStatusClosed, nil
+		}
 
-	return status
+		p.msMu.Lock()
+		p.msCache[exchange] = marketStatusEntry{
+			status:    status,
+			expiresAt: time.Now().Add(60 * time.Second),
+		}
+		p.msMu.Unlock()
+
+		return status, nil
+	})
+
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return quote.MarketStatusClosed
 }
 
 func (p *FinnhubProvider) fetchMarketStatus(ctx context.Context, exchange string) (string, error) {
