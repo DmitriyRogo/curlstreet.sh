@@ -31,8 +31,19 @@ func New(svc *service.QuoteService, logger *logrus.Logger, requestsPerMinute, bu
 	s := &Server{svc: svc, calendar: calendar, logger: logger}
 	mux.HandleFunc("/", s.handleQuote)
 	rl := newRateLimiter(requestsPerMinute, burst)
-	s.handler = rl.middleware(mux)
+	s.handler = securityHeaders(rl.middleware(mux))
 	return s
+}
+
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data:")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

@@ -27,8 +27,10 @@ func (s *stubServicer) FetchQuotes(_ context.Context, _ []string, _ quote.Respon
 func newTestServer(svc QuoteServicer) *Server {
 	logger := logrus.New()
 	logger.SetLevel(logrus.PanicLevel)
-	srv := &Server{svc: svc, mux: http.NewServeMux(), logger: logger}
-	srv.mux.HandleFunc("/", srv.handleQuote)
+	mux := http.NewServeMux()
+	srv := &Server{svc: svc, logger: logger}
+	mux.HandleFunc("/", srv.handleQuote)
+	srv.handler = mux
 	return srv
 }
 
@@ -120,6 +122,21 @@ func TestHandleQuote_CacheHitHeader(t *testing.T) {
 	srv.ServeHTTP(rr, req)
 
 	assert.Equal(t, "HIT", rr.Header().Get("X-Cache"))
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := securityHeaders(inner)
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	assert.Equal(t, "nosniff", rr.Header().Get("X-Content-Type-Options"))
+	assert.Equal(t, "DENY", rr.Header().Get("X-Frame-Options"))
+	assert.Equal(t, "no-referrer", rr.Header().Get("Referrer-Policy"))
+	assert.NotEmpty(t, rr.Header().Get("Content-Security-Policy"))
 }
 
 func TestHandleQuote_CacheMissHeader(t *testing.T) {

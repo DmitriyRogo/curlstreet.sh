@@ -191,14 +191,15 @@ func ansiToHTML(input string) string {
 
 			// Handle OSC 8 hyperlinks: "8;;URL" to open, "8;;" to close
 			if strings.HasPrefix(oscContent, "8;;") {
-				url := oscContent[3:]
-				if url == "" {
+				rawURL := oscContent[3:]
+				if rawURL == "" {
 					closeLink()
-				} else {
+				} else if strings.HasPrefix(rawURL, "https://") || strings.HasPrefix(rawURL, "http://") {
 					closeLink()
-					result.WriteString(`<a href="` + template.HTMLEscapeString(url) + `" target="_blank" rel="noopener">`)
+					result.WriteString(`<a href="` + template.HTMLEscapeString(rawURL) + `" target="_blank" rel="noopener">`)
 					linkOpen = true
 				}
+				// URLs with other schemes (javascript:, data:, etc.) are silently dropped.
 			}
 
 		default:

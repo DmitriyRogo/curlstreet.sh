@@ -38,6 +38,20 @@ func TestRenderHTMLHasMonospaceFont(t *testing.T) {
 	assert.Contains(t, out, "monospace")
 }
 
+func TestAnsiToHTML_RejectsJavascriptScheme(t *testing.T) {
+	// OSC 8 hyperlink with javascript: scheme must not produce an <a> tag
+	malicious := "\033]8;;javascript:alert(1)\033\\" + "click me" + "\033]8;;\033\\"
+	got := ansiToHTML(malicious)
+	assert.NotContains(t, got, "<a ", "javascript: URL must not produce an anchor tag")
+	assert.Contains(t, got, "click me", "link text must still be rendered")
+}
+
+func TestAnsiToHTML_AllowsHttpsScheme(t *testing.T) {
+	link := "\033]8;;https://example.com\033\\" + "example" + "\033]8;;\033\\"
+	got := ansiToHTML(link)
+	assert.Contains(t, got, `href="https://example.com"`)
+}
+
 func TestRenderError_JSONEscaping(t *testing.T) {
 	msg := `symbol "BTC/USD" not found: path\value`
 	got := RenderError(400, msg, quote.ResponseFormatJSON)
