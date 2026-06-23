@@ -3,9 +3,9 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -167,8 +167,8 @@ func (p *FinnhubProvider) marketStatus(ctx context.Context, exchange string) str
 }
 
 func (p *FinnhubProvider) fetchMarketStatus(ctx context.Context, exchange string) (string, error) {
-	url := fmt.Sprintf("%s/stock/market-status?exchange=%s&token=%s", p.baseURL, exchange, p.apiKey)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	params := url.Values{"exchange": {exchange}, "token": {p.apiKey}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/stock/market-status?"+params.Encode(), nil)
 	if err != nil {
 		return "", ErrProviderUnavailable
 	}
@@ -224,8 +224,8 @@ func exchangeShortName(mic, fallback string) string {
 }
 
 func (p *FinnhubProvider) fetchQuote(ctx context.Context, symbol string) (*finnhubQuoteResp, error) {
-	url := fmt.Sprintf("%s/quote?symbol=%s&token=%s", p.baseURL, symbol, p.apiKey)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	params := url.Values{"symbol": {symbol}, "token": {p.apiKey}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/quote?"+params.Encode(), nil)
 	if err != nil {
 		return nil, ErrProviderUnavailable
 	}
@@ -247,8 +247,8 @@ func (p *FinnhubProvider) fetchQuote(ctx context.Context, symbol string) (*finnh
 }
 
 func (p *FinnhubProvider) fetchMetric(ctx context.Context, symbol string) (*finnhubMetricResp, error) {
-	url := fmt.Sprintf("%s/stock/metric?symbol=%s&metric=all&token=%s", p.baseURL, symbol, p.apiKey)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	params := url.Values{"symbol": {symbol}, "metric": {"all"}, "token": {p.apiKey}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/stock/metric?"+params.Encode(), nil)
 	if err != nil {
 		return nil, ErrProviderUnavailable
 	}
@@ -293,8 +293,8 @@ func (p *FinnhubProvider) FetchEconomicCalendar(ctx context.Context) ([]quote.Ec
 	from := now.Format("2006-01-02")
 	to := now.AddDate(0, 0, 7).Format("2006-01-02")
 
-	url := fmt.Sprintf("%s/calendar/economic?from=%s&to=%s&token=%s", p.baseURL, from, to, p.apiKey)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	params := url.Values{"from": {from}, "to": {to}, "token": {p.apiKey}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/calendar/economic?"+params.Encode(), nil)
 	if err != nil {
 		return nil, ErrProviderUnavailable
 	}
@@ -345,8 +345,8 @@ func (p *FinnhubProvider) FetchEconomicCalendar(ctx context.Context) ([]quote.Ec
 }
 
 func (p *FinnhubProvider) fetchProfile(ctx context.Context, symbol string) (*finnhubProfileResp, error) {
-	url := fmt.Sprintf("%s/stock/profile2?symbol=%s&token=%s", p.baseURL, symbol, p.apiKey)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	params := url.Values{"symbol": {symbol}, "token": {p.apiKey}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/stock/profile2?"+params.Encode(), nil)
 	if err != nil {
 		return nil, ErrProviderUnavailable
 	}

@@ -202,6 +202,35 @@ func TestFinnhubFetch_ServerError(t *testing.T) {
 	assert.ErrorIs(t, err, ErrProviderUnavailable)
 }
 
+func TestFinnhubProvider_URLEncodesAPIKey(t *testing.T) {
+	var capturedQueries []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedQueries = append(capturedQueries, r.URL.RawQuery)
+		w.WriteHeader(http.StatusOK)
+		// Return minimal valid JSON for each endpoint
+		switch r.URL.Path {
+		case "/quote":
+			fmt.Fprint(w, `{"c":100,"d":1,"dp":1,"h":101,"l":99,"v":1000}`)
+		case "/stock/profile2":
+			fmt.Fprint(w, `{"name":"Test","currency":"USD"}`)
+		case "/stock/market-status":
+			fmt.Fprint(w, `{"isOpen":true,"session":"regular"}`)
+		case "/stock/metric":
+			fmt.Fprint(w, `{"metric":{"52WeekHigh":110,"52WeekLow":90}}`)
+		}
+	}))
+	defer srv.Close()
+
+	// API key contains characters that must be percent-encoded
+	p := NewFinnhubWithBase("key+with&special=chars", srv.URL, 5*time.Second)
+	p.Fetch(context.Background(), "AAPL") //nolint:errcheck
+
+	for _, q := range capturedQueries {
+		assert.Contains(t, q, "key%2Bwith%26special%3Dchars",
+			"API key must be URL-encoded in query: %s", q)
+	}
+}
+
 func TestFinnhubProvider_OversizedBody(t *testing.T) {
 	huge := strings.Repeat("x", 2<<20) // 2 MiB of garbage
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
