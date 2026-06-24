@@ -26,11 +26,11 @@ type Server struct {
 	logger   *logrus.Logger
 }
 
-func New(svc *service.QuoteService, logger *logrus.Logger, requestsPerMinute, burst int, calendar CalendarFetcher) *Server {
+func New(svc *service.QuoteService, logger *logrus.Logger, requestsPerMinute, burst int, trustedProxy string, calendar CalendarFetcher) *Server {
 	mux := http.NewServeMux()
 	s := &Server{svc: svc, calendar: calendar, logger: logger}
 	mux.HandleFunc("/", s.handleQuote)
-	rl := newRateLimiter(requestsPerMinute, burst)
+	rl := newRateLimiter(requestsPerMinute, burst, trustedProxy)
 	s.handler = securityHeaders(rl.middleware(mux))
 	return s
 }

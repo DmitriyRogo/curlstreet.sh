@@ -124,6 +124,28 @@ func TestHandleQuote_CacheHitHeader(t *testing.T) {
 	assert.Equal(t, "HIT", rr.Header().Get("X-Cache"))
 }
 
+func TestRateLimiter_TrustedProxyUsesXFF(t *testing.T) {
+	rl := newRateLimiter(60, 100, "127.0.0.1/32")
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := rl.middleware(inner)
+
+	makeReq := func(xff string) int {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		r.RemoteAddr = "127.0.0.1:9999"
+		r.Header.Set("X-Forwarded-For", xff)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w.Code
+	}
+
+	// Two requests from different XFF IPs via the trusted proxy should each
+	// be treated as independent clients — neither should be rate-limited.
+	assert.Equal(t, http.StatusOK, makeReq("10.0.0.1"))
+	assert.Equal(t, http.StatusOK, makeReq("10.0.0.2"))
+}
+
 func TestSecurityHeaders(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

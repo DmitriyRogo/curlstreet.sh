@@ -12,6 +12,7 @@ type Config struct {
 		Addr         string        `yaml:"addr"`
 		ReadTimeout  time.Duration `yaml:"read_timeout"`
 		WriteTimeout time.Duration `yaml:"write_timeout"`
+		TrustedProxy string        `yaml:"trusted_proxy"` // CIDR of reverse proxy, e.g. "10.0.0.0/8"; empty = disabled
 	} `yaml:"server"`
 	Cache struct {
 		Capacity int           `yaml:"capacity"`
@@ -24,6 +25,10 @@ type Config struct {
 	CoinGecko struct {
 		Timeout time.Duration `yaml:"timeout"`
 	} `yaml:"coingecko"`
+	RateLimit struct {
+		RequestsPerMinute int `yaml:"requests_per_minute"`
+		Burst             int `yaml:"burst"`
+	} `yaml:"rate_limit"`
 }
 
 func Load(path string) (*Config, error) {
@@ -35,6 +40,8 @@ func Load(path string) (*Config, error) {
 	cfg.Cache.TTL = 60 * time.Second
 	cfg.Finnhub.Timeout = 5 * time.Second
 	cfg.CoinGecko.Timeout = 5 * time.Second
+	cfg.RateLimit.RequestsPerMinute = 60
+	cfg.RateLimit.Burst = 10
 
 	f, err := os.Open(path)
 	if err != nil {

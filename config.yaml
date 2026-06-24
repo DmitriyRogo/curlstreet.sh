@@ -2,6 +2,7 @@ server:
   addr: ":8080"
   read_timeout: 10s
   write_timeout: 10s
+  trusted_proxy: ""  # CIDR of your reverse proxy (e.g. "10.0.0.0/8"); leave empty when running without a proxy
 
 cache:
   capacity: 1000
@@ -13,3 +14,7 @@ finnhub:
 
 coingecko:
   timeout: 5s
+
+rate_limit:
+  requests_per_minute: 60
+  burst: 10
