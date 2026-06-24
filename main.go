@@ -18,10 +18,12 @@ import (
 )
 
 func main() {
-	_ = godotenv.Load()
-
 	log := logrus.New()
 	log.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
+
+	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
+		log.WithError(err).Warn("failed to parse .env file")
+	}
 
 	cfg, err := config.Load("config.yaml")
 	if err != nil {

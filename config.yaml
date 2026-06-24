@@ -9,7 +9,7 @@ cache:
   ttl: 60s
 
 finnhub:
-  api_key: ""
+  api_key: ""  # do not set a real key here — use the FINNHUB_API_KEY environment variable instead
   timeout: 5s
 
 coingecko:
