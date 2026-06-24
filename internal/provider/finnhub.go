@@ -262,8 +262,7 @@ func (p *FinnhubProvider) fetchQuote(ctx context.Context, symbol string) (*finnh
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
-		log.Printf("finnhub /quote status=%d body=%q apiKeyLen=%d", resp.StatusCode, body, len(p.apiKey))
+		log.Printf("finnhub /quote status=%d", resp.StatusCode)
 		return nil, fmt.Errorf("finnhub /quote status %d: %w", resp.StatusCode, ErrProviderUnavailable)
 	}
 
