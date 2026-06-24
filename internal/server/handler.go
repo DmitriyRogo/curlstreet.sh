@@ -9,6 +9,23 @@ import (
 	"github.com/dmitriy/curlstreet/internal/render"
 )
 
+var marketIndices = []struct {
+	symbol string
+	name   string
+}{
+	{"SPY", "S&P 500 ETF Trust"},
+	{"QQQ", "Nasdaq 100 ETF"},
+	{"DIA", "Dow Jones ETF"},
+}
+
+// indexNames provides fallback display names for ETF/index symbols
+// that Finnhub's profile2 endpoint returns empty for.
+var indexNames = map[string]string{
+	"SPY": "S&P 500 ETF Trust",
+	"QQQ": "Nasdaq 100 ETF",
+	"DIA": "Dow Jones ETF",
+}
+
 func (s *Server) handleQuote(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		format := quote.DetectFormat(r.Header.Get("User-Agent"), r.URL.Query().Get("format"))
@@ -17,31 +34,54 @@ func (s *Server) handleQuote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	path := strings.TrimPrefix(r.URL.Path, "/")
-	if path == "" {
-		path = r.URL.RawQuery
-	}
+	format := quote.DetectFormat(r.Header.Get("User-Agent"), r.URL.Query().Get("format"))
 
-	symbolsRaw := strings.Split(path, ",")
-	symbols := make([]string, 0, len(symbolsRaw))
-	for _, s := range symbolsRaw {
-		s = strings.TrimSpace(s)
-		if s != "" {
-			symbols = append(symbols, s)
+	// Fetch market index overview for text/HTML formats (not JSON)
+	var marketResults []quote.QuoteResult
+	if format != quote.ResponseFormatJSON {
+		syms := make([]string, len(marketIndices))
+		for i, idx := range marketIndices {
+			syms[i] = idx.symbol
+		}
+		marketResults, _ = s.svc.FetchQuotes(r.Context(), syms, format)
+		for i := range marketResults {
+			marketResults[i].IsMarket = true
+			// Fill in display name for ETFs whose profile2 returns empty
+			if marketResults[i].Quote != nil && marketResults[i].Quote.Name == "" {
+				if name, ok := indexNames[marketResults[i].Quote.Symbol]; ok {
+					marketResults[i].Quote.Name = name
+				}
+			}
 		}
 	}
 
-	format := quote.DetectFormat(r.Header.Get("User-Agent"), r.URL.Query().Get("format"))
-
-	if len(symbols) == 0 {
-		writeError(w, http.StatusBadRequest, "No symbol specified.", format)
-		return
+	var tickerResults []quote.QuoteResult
+	if path != "" {
+		symbolsRaw := strings.Split(path, ",")
+		symbols := make([]string, 0, len(symbolsRaw))
+		for _, sym := range symbolsRaw {
+			sym = strings.TrimSpace(sym)
+			if sym != "" {
+				symbols = append(symbols, sym)
+			}
+		}
+		if len(symbols) > 0 {
+			var err error
+			tickerResults, err = s.svc.FetchQuotes(r.Context(), symbols, format)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, err.Error(), format)
+				return
+			}
+		}
 	}
 
-	results, err := s.svc.FetchQuotes(r.Context(), symbols, format)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error(), format)
-		return
+	// Fetch live economic calendar for the homepage when not in JSON mode.
+	var econEvents []quote.EconEvent
+	if path == "" && format != quote.ResponseFormatJSON && s.calendar != nil {
+		econEvents, _ = s.calendar.FetchEconomicCalendar(r.Context())
 	}
+
+	results := append(marketResults, tickerResults...)
 
 	// Determine X-Cache header
 	allHit := true
@@ -57,13 +97,12 @@ func (s *Server) handleQuote(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Cache", "MISS")
 	}
 
-	// Determine HTTP status
+	// HTTP status driven by user-requested ticker errors only
 	status := http.StatusOK
-	if allErrors(results) && len(results) > 0 {
-		status = results[0].Err.Code
+	if allErrors(tickerResults) && len(tickerResults) > 0 {
+		status = tickerResults[0].Err.Code
 	}
 
-	// Set content type
 	switch format {
 	case quote.ResponseFormatJSON:
 		w.Header().Set("Content-Type", "application/json")
@@ -73,7 +112,7 @@ func (s *Server) handleQuote(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	}
 
-	body, err := render.Render(format, results)
+	body, err := render.Render(format, results, econEvents...)
 	if err != nil {
 		s.logger.WithError(err).Error("render error")
 		http.Error(w, "internal server error", http.StatusInternalServerError)

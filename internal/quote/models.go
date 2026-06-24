@@ -34,11 +34,29 @@ type Quote struct {
 	AvgVolume     *int64    `json:"avg_volume"`
 	High52W       *float64  `json:"high_52w"`
 	Low52W        *float64  `json:"low_52w"`
+	MarketCap     *int64    `json:"market_cap"`
 	Currency      string    `json:"currency"`
 	MarketStatus  *string   `json:"market_status"`
 	AssetType     AssetType `json:"asset_type"`
+	Exchange      string    `json:"exchange"`
+	ExchangeCode  string    `json:"exchange_code,omitempty"`
+	SecurityType  string    `json:"security_type,omitempty"`
+	Sector        string    `json:"sector"`
+	Industry      string    `json:"industry"`
 	UpdatedAt     time.Time `json:"updated_at"`
 	CacheHit      bool      `json:"-"`
+}
+
+// EconEvent represents a single entry from an economic data calendar.
+type EconEvent struct {
+	Name    string   `json:"event"`
+	Country string   `json:"country"`
+	When    string   `json:"time"`    // formatted display time, e.g. "Thu 08:30 ET"
+	Impact  string   `json:"impact"`  // "low", "medium", "high"
+	Actual  *float64 `json:"actual"`
+	Est     *float64 `json:"estimate"`
+	Prev    *float64 `json:"prev"`
+	Unit    string   `json:"unit"`
 }
 
 type SymbolError struct {
@@ -48,6 +66,9 @@ type SymbolError struct {
 }
 
 type QuoteResult struct {
-	Quote *Quote       `json:"quote,omitempty"`
-	Err   *SymbolError `json:"error,omitempty"`
+	Quote        *Quote       `json:"quote,omitempty"`
+	Err          *SymbolError `json:"error,omitempty"`
+	IsMarket     bool         `json:"-"`
+	IsPulse      bool         `json:"-"`
+	DisplayLabel string       `json:"-"`
 }

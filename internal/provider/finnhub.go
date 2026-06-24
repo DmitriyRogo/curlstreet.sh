@@ -58,8 +58,9 @@ type finnhubQuoteResp struct {
 
 type finnhubMetricResp struct {
 	Metric struct {
-		High52W float64 `json:"52WeekHigh"`
-		Low52W  float64 `json:"52WeekLow"`
+		High52W   float64 `json:"52WeekHigh"`
+		Low52W    float64 `json:"52WeekLow"`
+		MarketCap float64 `json:"marketCapitalization"` // in millions USD
 	} `json:"metric"`
 }
 
@@ -115,19 +116,24 @@ func (p *FinnhubProvider) Fetch(ctx context.Context, symbol string) (*quote.Quot
 
 	// Use intraday high/low as fallback if 52W metric is unavailable.
 	high52, low52 := qr.H, qr.L
+	var mcap *int64
 	if mRes.err == nil && mRes.val.Metric.High52W > 0 {
 		high52 = mRes.val.Metric.High52W
 		low52 = mRes.val.Metric.Low52W
 	}
+	if mRes.err == nil && mRes.val.Metric.MarketCap > 0 {
+		v := int64(mRes.val.Metric.MarketCap * 1_000_000)
+		mcap = &v
+	}
 
-	vol := int64(qr.V)
 	q := &quote.Quote{
 		Symbol:        symbol,
 		Name:          pr.Name,
 		Price:         qr.C,
 		Change:        qr.D,
 		ChangePercent: qr.Dp,
-		Volume:        &vol,
+		Volume:        nil,
+		MarketCap:     mcap,
 		High52W:       &high52,
 		Low52W:        &low52,
 		Currency:      currency,
