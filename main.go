@@ -54,7 +54,7 @@ func main() {
 	}()
 
 	svc := service.NewQuoteService(quoteCache, finnhub, coinGecko)
-	srv := server.New(svc, log, cfg.RateLimit.RequestsPerMinute, cfg.RateLimit.Burst, cfg.Server.TrustedProxy, server.ComputedCalendar())
+	srv := server.New(svc, log, cfg.RateLimit.RequestsPerMinute, cfg.RateLimit.Burst, cfg.Server.TrustedProxy, server.ComputedCalendar(), finnhub)
 
 	httpSrv := &http.Server{
 		Addr:         cfg.Server.Addr,

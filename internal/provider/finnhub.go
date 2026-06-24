@@ -249,6 +249,24 @@ func exchangeShortName(mic, fallback string) string {
 	return mic
 }
 
+// Probe makes a minimal request to Finnhub and returns the raw error (not
+// wrapped) so callers can distinguish network failures from HTTP errors.
+func (p *FinnhubProvider) Probe(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/quote?symbol=AAPL&token="+p.apiKey, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	return nil
+}
+
 func (p *FinnhubProvider) fetchQuote(ctx context.Context, symbol string) (*finnhubQuoteResp, error) {
 	params := url.Values{"symbol": {symbol}, "token": {p.apiKey}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/quote?"+params.Encode(), nil)
