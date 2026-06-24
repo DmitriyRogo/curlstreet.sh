@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"pgregory.net/rapid"
@@ -52,7 +53,7 @@ func TestRenderTextLineWidth(t *testing.T) {
 		for _, line := range strings.Split(out, "\n") {
 			// Strip ANSI escape codes for length check
 			plain := stripANSI(line)
-			assert.LessOrEqual(t, len(plain), 80, "line too long: %q", plain)
+			assert.LessOrEqual(t, utf8.RuneCountInString(plain), 80, "line too long: %q", plain)
 		}
 	})
 }
@@ -84,15 +85,14 @@ func TestRenderTextRedOnNegative(t *testing.T) {
 	assert.Contains(t, out, "-5.00")
 }
 
-// P11: Crypto omits market status, uses 24h labels
+// P11: Crypto omits market status, uses 24h range label
 func TestCryptoOmitsMarketStatus(t *testing.T) {
 	q := makeTestCryptoQuote(62000.0, 1200.0, 1.97)
 	out, err := RenderText([]quote.QuoteResult{{Quote: q}})
 	assert.NoError(t, err)
 	assert.NotContains(t, out, "LIVE")
 	assert.NotContains(t, out, "LAST CLOSE")
-	assert.Contains(t, out, "24h High")
-	assert.Contains(t, out, "24h Low")
+	assert.Contains(t, out, "24h range")
 }
 
 // P12: Crypto decimal precision — ≥$0.01 → 2dp; <$0.01 → up to 8dp
@@ -119,18 +119,42 @@ func TestRenderTextDivider(t *testing.T) {
 	assert.Contains(t, out, "──")
 }
 
-// stripANSI removes ANSI escape codes from s for length checking.
+// stripANSI removes ANSI SGR and OSC 8 escape sequences from s for visible
+// length checking. SGR sequences are ESC[...m; OSC sequences are ESC]...BEL
+// or ESC]...ST (where ST = ESC \).
 func stripANSI(s string) string {
 	var result strings.Builder
 	i := 0
 	for i < len(s) {
-		if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '[' {
-			// skip until 'm'
-			i += 2
-			for i < len(s) && s[i] != 'm' {
+		if s[i] == '\x1b' && i+1 < len(s) {
+			switch s[i+1] {
+			case '[':
+				// SGR: skip to 'm'
+				i += 2
+				for i < len(s) && s[i] != 'm' {
+					i++
+				}
+				if i < len(s) {
+					i++
+				}
+			case ']':
+				// OSC: skip to BEL or ST (ESC \)
+				i += 2
+				for i < len(s) {
+					if s[i] == 0x07 {
+						i++
+						break
+					}
+					if s[i] == '\x1b' && i+1 < len(s) && s[i+1] == '\\' {
+						i += 2
+						break
+					}
+					i++
+				}
+			default:
+				result.WriteByte(s[i])
 				i++
 			}
-			i++ // skip 'm'
 		} else {
 			result.WriteByte(s[i])
 			i++

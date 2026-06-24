@@ -2,7 +2,6 @@
 .env
 
 # Project-specific exclusions
-.kiro/
 CLAUDE.md
 
 # Rapid property-test failure artifacts

@@ -131,12 +131,12 @@ func TestFinnhubFetch_MarketStatusFallbackOnError(t *testing.T) {
 	assert.Equal(t, "CLOSED", *q.MarketStatus)
 }
 
-func TestFinnhubFetch_VolumeAnd52W(t *testing.T) {
+func TestFinnhubFetch_MarketCapAnd52W(t *testing.T) {
 	srv := mockFinnhubServerWithMetric(
-		map[string]any{"c": 189.45, "d": 1.23, "dp": 0.65, "h": 191.0, "l": 187.5, "v": 55123456.0},
+		map[string]any{"c": 189.45, "d": 1.23, "dp": 0.65, "h": 191.0, "l": 187.5},
 		map[string]any{"name": "Apple Inc.", "currency": "USD", "mic": "XNAS"},
 		map[string]any{"isOpen": true, "session": "regular"},
-		map[string]any{"metric": map[string]any{"52WeekHigh": 199.62, "52WeekLow": 124.17}},
+		map[string]any{"metric": map[string]any{"52WeekHigh": 199.62, "52WeekLow": 124.17, "marketCapitalization": 2950000.0}},
 	)
 	defer srv.Close()
 
@@ -144,8 +144,9 @@ func TestFinnhubFetch_VolumeAnd52W(t *testing.T) {
 	q, err := p.Fetch(context.Background(), "AAPL")
 
 	require.NoError(t, err)
-	require.NotNil(t, q.Volume)
-	assert.Equal(t, int64(55123456), *q.Volume)
+	assert.Nil(t, q.Volume)
+	require.NotNil(t, q.MarketCap)
+	assert.Equal(t, int64(2_950_000_000_000), *q.MarketCap)
 	require.NotNil(t, q.High52W)
 	assert.InDelta(t, 199.62, *q.High52W, 0.001)
 	require.NotNil(t, q.Low52W)

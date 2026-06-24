@@ -6,18 +6,15 @@ import (
 	"github.com/dmitriy/curlstreet/internal/quote"
 )
 
-type RenderFunc func(quotes []quote.QuoteResult) (string, error)
-
-var rendererMap = map[quote.ResponseFormat]RenderFunc{
-	quote.ResponseFormatText: RenderText,
-	quote.ResponseFormatHTML: RenderHTML,
-	quote.ResponseFormatJSON: RenderJSON,
-}
-
-func Render(format quote.ResponseFormat, quotes []quote.QuoteResult) (string, error) {
-	fn, ok := rendererMap[format]
-	if !ok {
+func Render(format quote.ResponseFormat, quotes []quote.QuoteResult, events ...quote.EconEvent) (string, error) {
+	switch format {
+	case quote.ResponseFormatText:
+		return RenderText(quotes, events...)
+	case quote.ResponseFormatHTML:
+		return RenderHTML(quotes, events...)
+	case quote.ResponseFormatJSON:
+		return RenderJSON(quotes)
+	default:
 		return "", fmt.Errorf("unknown format: %q", format)
 	}
-	return fn(quotes)
 }
