@@ -35,8 +35,23 @@ func main() {
 		log.WithError(err).Fatal("failed to create cache")
 	}
 
+	log.WithField("finnhub_key_set", cfg.Finnhub.APIKey != "").Info("provider config")
+
 	finnhub := provider.NewFinnhub(cfg.Finnhub.APIKey, cfg.Finnhub.Timeout)
 	coinGecko := provider.NewCoinGecko(cfg.CoinGecko.Timeout)
+
+	// Startup connectivity probe — logs whether Finnhub is reachable so
+	// deployment issues show up immediately in the startup log.
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer cancel()
+		_, err := finnhub.Fetch(ctx, "AAPL")
+		if err != nil {
+			log.WithError(err).Warn("finnhub connectivity probe failed")
+		} else {
+			log.Info("finnhub connectivity probe OK")
+		}
+	}()
 
 	svc := service.NewQuoteService(quoteCache, finnhub, coinGecko)
 	srv := server.New(svc, log, cfg.RateLimit.RequestsPerMinute, cfg.RateLimit.Burst, cfg.Server.TrustedProxy, server.ComputedCalendar())
