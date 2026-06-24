@@ -3,7 +3,9 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"sync"
@@ -260,7 +262,9 @@ func (p *FinnhubProvider) fetchQuote(ctx context.Context, symbol string) (*finnh
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, ErrProviderUnavailable
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+		log.Printf("finnhub /quote status=%d body=%q apiKeyLen=%d", resp.StatusCode, body, len(p.apiKey))
+		return nil, fmt.Errorf("finnhub /quote status %d: %w", resp.StatusCode, ErrProviderUnavailable)
 	}
 
 	var r finnhubQuoteResp
