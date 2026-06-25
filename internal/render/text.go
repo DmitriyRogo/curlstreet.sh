@@ -73,7 +73,7 @@ func RenderText(quotes []quote.QuoteResult, events ...quote.EconEvent) (string, 
 
 	sb.WriteString("\n")
 	sb.WriteString(
-		"  " + osc8Link("https://github.com/dmitriy/curlstreet", badgeGH.Sprint(" ☆ curlstreet ")) +
+		"  " + osc8Link("https://github.com/DmitriyRogo/curlstreet.sh", badgeGH.Sprint(" ☆ curlstreet.sh ")) +
 			"   " +
 			osc8Link("https://www.linkedin.com/in/dmitriy-rogozhnikov", badgeLI.Sprint(" in dmitriy-rogozhnikov ")) + "\n",
 	)
