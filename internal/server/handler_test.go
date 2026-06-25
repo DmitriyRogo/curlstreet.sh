@@ -21,7 +21,22 @@ type stubServicer struct {
 }
 
 func (s *stubServicer) FetchQuotes(_ context.Context, _ []string, _ quote.ResponseFormat) ([]quote.QuoteResult, error) {
-	return s.results, s.err
+	if s.err != nil {
+		return nil, s.err
+	}
+	// Return independent copies, mirroring the real service (which allocates a
+	// fresh slice and cached-quote copies per call). The handler now fetches the
+	// market banner and the user's tickers concurrently, so a shared slice would
+	// otherwise be mutated from two goroutines at once.
+	out := make([]quote.QuoteResult, len(s.results))
+	for i, r := range s.results {
+		out[i] = r
+		if r.Quote != nil {
+			q := *r.Quote
+			out[i].Quote = &q
+		}
+	}
+	return out, nil
 }
 
 func newTestServer(svc QuoteServicer) *Server {
@@ -159,6 +174,45 @@ func TestSecurityHeaders(t *testing.T) {
 	assert.Equal(t, "DENY", rr.Header().Get("X-Frame-Options"))
 	assert.Equal(t, "no-referrer", rr.Header().Get("Referrer-Policy"))
 	assert.NotEmpty(t, rr.Header().Get("Content-Security-Policy"))
+}
+
+// slowMarketServicer answers ticker requests immediately but blocks on the
+// market-index request until its context is cancelled, simulating a slow
+// upstream for the homepage banner.
+type slowMarketServicer struct {
+	ticker []quote.QuoteResult
+}
+
+func (s *slowMarketServicer) FetchQuotes(ctx context.Context, symbols []string, _ quote.ResponseFormat) ([]quote.QuoteResult, error) {
+	for _, sym := range symbols {
+		if sym == "SPY" { // the market-index banner fetch
+			<-ctx.Done()
+			return []quote.QuoteResult{
+				{Err: &quote.SymbolError{Symbol: "SPY", Code: 504, Message: "timeout"}},
+			}, nil
+		}
+	}
+	return s.ticker, nil
+}
+
+// #4: a slow market banner must not block the page — it degrades to
+// "(market data unavailable)" while the requested ticker still renders.
+func TestHandleQuote_SlowMarketDegradesGracefully(t *testing.T) {
+	srv := newTestServer(&slowMarketServicer{ticker: []quote.QuoteResult{makeQuoteResult("AAPL", 189.45)}})
+	srv.marketTimeout = 50 * time.Millisecond
+
+	req := httptest.NewRequest(http.MethodGet, "/AAPL", nil)
+	req.Header.Set("User-Agent", "curl/7.88.0")
+	rr := httptest.NewRecorder()
+
+	start := time.Now()
+	srv.ServeHTTP(rr, req)
+	elapsed := time.Since(start)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), "AAPL", "requested ticker should still render")
+	assert.Contains(t, rr.Body.String(), "market data unavailable", "slow banner should degrade")
+	assert.Less(t, elapsed, time.Second, "page should not wait far beyond the market timeout")
 }
 
 func TestHandleQuote_CacheMissHeader(t *testing.T) {
