@@ -6,6 +6,7 @@ CLAUDE.md
 
 # Rapid property-test failure artifacts
 **/testdata/rapid/
+**/docs/
 
 # Go build artifacts
 *.exe
