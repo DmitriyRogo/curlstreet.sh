@@ -64,14 +64,15 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	if s.prober == nil {
-		fmt.Fprintln(w, "ok (no prober configured)")
+		fmt.Fprintln(w, "ok")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
 	if err := s.prober.Probe(ctx); err != nil {
+		s.logger.WithError(err).Warn("finnhub probe failed")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		fmt.Fprintf(w, "finnhub probe failed: %v\n", err)
+		fmt.Fprintln(w, "finnhub unavailable")
 		return
 	}
 	fmt.Fprintln(w, "ok")

@@ -249,22 +249,45 @@ func exchangeShortName(mic, fallback string) string {
 	return mic
 }
 
-// Probe makes a minimal request to Finnhub and returns the raw error (not
-// wrapped) so callers can distinguish network failures from HTTP errors.
+// Probe makes a minimal request to Finnhub and returns a sanitized error
+// (URL and token stripped) so callers can diagnose failures without
+// leaking credentials.
 func (p *FinnhubProvider) Probe(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/quote?symbol=AAPL&token="+p.apiKey, nil)
+	params := url.Values{"symbol": {"AAPL"}, "token": {p.apiKey}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/quote?"+params.Encode(), nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("build request: %w", err)
 	}
 	resp, err := p.client.Do(req)
 	if err != nil {
-		return err
+		// Strip the URL (which contains the token) from the error message.
+		return fmt.Errorf("connect to finnhub.io: %w", sanitizeNetErr(err))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 128))
+		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, body)
 	}
 	return nil
+}
+
+// sanitizeNetErr returns the innermost non-URL error from a net/http error so
+// the API key embedded in the request URL is never surfaced.
+func sanitizeNetErr(err error) error {
+	type unwrapper interface{ Unwrap() error }
+	for err != nil {
+		msg := err.Error()
+		// Stop once we're past the layer that quotes the URL.
+		if len(msg) < 4 || msg[:4] != "Get " {
+			return err
+		}
+		u, ok := err.(unwrapper)
+		if !ok {
+			return fmt.Errorf("network error")
+		}
+		err = u.Unwrap()
+	}
+	return fmt.Errorf("network error")
 }
 
 func (p *FinnhubProvider) fetchQuote(ctx context.Context, symbol string) (*finnhubQuoteResp, error) {
