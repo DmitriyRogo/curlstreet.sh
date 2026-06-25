@@ -34,6 +34,9 @@ func NewWithClock(capacity int, ttl time.Duration, timeFn func() time.Time) (*Qu
 	return &QuoteCache{lru: l, ttl: ttl, timeFn: timeFn}, nil
 }
 
+// Get returns an isolated copy of the cached quote. Callers may freely mutate
+// the returned value (e.g. set CacheHit or fill a display name) without
+// affecting the cached entry or any other concurrent caller.
 func (c *QuoteCache) Get(symbol string) (*quote.Quote, bool) {
 	e, ok := c.lru.Get(symbol)
 	if !ok {
@@ -43,14 +46,27 @@ func (c *QuoteCache) Get(symbol string) (*quote.Quote, bool) {
 		c.lru.Remove(symbol)
 		return nil, false
 	}
-	return e.quote, true
+	return cloneQuote(e.quote), true
 }
 
+// Add stores an isolated copy of q so the caller retaining its own reference
+// cannot later mutate the cached entry.
 func (c *QuoteCache) Add(symbol string, q *quote.Quote) {
 	c.lru.Add(symbol, cacheEntry{
-		quote:     q,
+		quote:     cloneQuote(q),
 		expiresAt: c.timeFn().Add(c.ttl),
 	})
+}
+
+// cloneQuote returns a shallow copy of q. Pointer fields (e.g. High52W,
+// MarketStatus) are shared by reference and must be treated as immutable —
+// callers replace them rather than writing through them.
+func cloneQuote(q *quote.Quote) *quote.Quote {
+	if q == nil {
+		return nil
+	}
+	cp := *q
+	return &cp
 }
 
 func (c *QuoteCache) Remove(symbol string) {
