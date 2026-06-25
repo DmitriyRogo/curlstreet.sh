@@ -25,17 +25,23 @@ type Prober interface {
 	Probe(ctx context.Context) error
 }
 
+// defaultMarketOverviewTimeout bounds the homepage market-index banner fetch so
+// a slow upstream degrades to "(market data unavailable)" instead of pushing the
+// response past the server's write deadline.
+const defaultMarketOverviewTimeout = 6 * time.Second
+
 type Server struct {
-	svc      QuoteServicer
-	calendar CalendarFetcher // nil → static fallback events
-	prober   Prober          // nil → health check skips provider probe
-	handler  http.Handler
-	logger   *logrus.Logger
+	svc           QuoteServicer
+	calendar      CalendarFetcher // nil → static fallback events
+	prober        Prober          // nil → health check skips provider probe
+	handler       http.Handler
+	logger        *logrus.Logger
+	marketTimeout time.Duration // 0 → defaultMarketOverviewTimeout
 }
 
 func New(svc *service.QuoteService, logger *logrus.Logger, requestsPerMinute, burst int, trustedProxy string, calendar CalendarFetcher, prober ...Prober) *Server {
 	mux := http.NewServeMux()
-	s := &Server{svc: svc, calendar: calendar, logger: logger}
+	s := &Server{svc: svc, calendar: calendar, logger: logger, marketTimeout: defaultMarketOverviewTimeout}
 	if len(prober) > 0 {
 		s.prober = prober[0]
 	}

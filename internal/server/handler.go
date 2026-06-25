@@ -1,9 +1,11 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/render"
@@ -36,23 +38,17 @@ func (s *Server) handleQuote(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/")
 	format := quote.DetectFormat(r.Header.Get("User-Agent"), r.URL.Query().Get("format"))
 
-	// Fetch market index overview for text/HTML formats (not JSON)
-	var marketResults []quote.QuoteResult
+	// Kick off the market-index banner concurrently with the user's ticker
+	// fetch so it never serially adds to response latency. It runs under its
+	// own bounded context (defer cancels it on any early return) and degrades
+	// to "(market data unavailable)" rather than risking the write deadline.
+	marketCh := make(chan []quote.QuoteResult, 1)
+	marketCtx, marketCancel := context.WithTimeout(r.Context(), s.marketOverviewTimeout())
+	defer marketCancel()
 	if format != quote.ResponseFormatJSON {
-		syms := make([]string, len(marketIndices))
-		for i, idx := range marketIndices {
-			syms[i] = idx.symbol
-		}
-		marketResults, _ = s.svc.FetchQuotes(r.Context(), syms, format)
-		for i := range marketResults {
-			marketResults[i].IsMarket = true
-			// Fill in display name for ETFs whose profile2 returns empty
-			if marketResults[i].Quote != nil && marketResults[i].Quote.Name == "" {
-				if name, ok := indexNames[marketResults[i].Quote.Symbol]; ok {
-					marketResults[i].Quote.Name = name
-				}
-			}
-		}
+		go func() { marketCh <- s.fetchMarketOverview(marketCtx, format) }()
+	} else {
+		marketCh <- nil
 	}
 
 	var tickerResults []quote.QuoteResult
@@ -74,6 +70,8 @@ func (s *Server) handleQuote(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	marketResults := <-marketCh
 
 	// Fetch live economic calendar for the homepage when not in JSON mode.
 	var econEvents []quote.EconEvent
@@ -121,6 +119,46 @@ func (s *Server) handleQuote(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(status)
 	fmt.Fprint(w, body)
+}
+
+func (s *Server) marketOverviewTimeout() time.Duration {
+	if s.marketTimeout > 0 {
+		return s.marketTimeout
+	}
+	return defaultMarketOverviewTimeout
+}
+
+// fetchMarketOverview fetches the market-index banner quotes and tags them for
+// rendering. It returns nil when no index quote could be retrieved (timeout or
+// upstream failure) so the banner degrades to "(market data unavailable)"
+// instead of showing a row of errors.
+func (s *Server) fetchMarketOverview(ctx context.Context, format quote.ResponseFormat) []quote.QuoteResult {
+	syms := make([]string, len(marketIndices))
+	for i, idx := range marketIndices {
+		syms[i] = idx.symbol
+	}
+
+	results, _ := s.svc.FetchQuotes(ctx, syms, format)
+
+	hasQuote := false
+	for i := range results {
+		results[i].IsMarket = true
+		if results[i].Quote == nil {
+			continue
+		}
+		hasQuote = true
+		// Fill in display name for ETFs whose profile2 returns empty.
+		if results[i].Quote.Name == "" {
+			if name, ok := indexNames[results[i].Quote.Symbol]; ok {
+				results[i].Quote.Name = name
+			}
+		}
+	}
+
+	if !hasQuote {
+		return nil
+	}
+	return results
 }
 
 func allErrors(results []quote.QuoteResult) bool {
