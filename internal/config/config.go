@@ -46,14 +46,15 @@ func Load(path string) (*Config, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return cfg, nil
+			// Config file is optional; env overrides are still applied below.
+		} else {
+			return nil, err
 		}
-		return nil, err
-	}
-	defer f.Close()
-
-	if err := yaml.NewDecoder(f).Decode(cfg); err != nil {
-		return nil, err
+	} else {
+		defer f.Close()
+		if err := yaml.NewDecoder(f).Decode(cfg); err != nil {
+			return nil, err
+		}
 	}
 
 	if key := os.Getenv("FINNHUB_API_KEY"); key != "" {
