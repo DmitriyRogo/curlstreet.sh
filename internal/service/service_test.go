@@ -80,6 +80,49 @@ func TestBatchCompleteness(t *testing.T) {
 	})
 }
 
+// echoProvider returns a quote whose Name encodes the requested symbol, after
+// an artificial delay, so out-of-order completion is detectable.
+type echoProvider struct{ delay time.Duration }
+
+func (e *echoProvider) Fetch(_ context.Context, sym string) (*quote.Quote, error) {
+	time.Sleep(e.delay)
+	return &quote.Quote{Symbol: sym, Name: "name-" + sym, Price: 1, AssetType: quote.AssetTypeStock}, nil
+}
+
+// Concurrent fetches must preserve request order in the result slice.
+func TestFetchQuotesPreservesOrder(t *testing.T) {
+	prov := &echoProvider{delay: 20 * time.Millisecond}
+	svc := NewQuoteService(&stubCache{}, prov, prov)
+
+	symbols := []string{"AAA", "BBB", "CCC", "DDD", "EEE"}
+	results, err := svc.FetchQuotes(context.Background(), symbols, quote.ResponseFormatText)
+	require.NoError(t, err)
+	require.Len(t, results, len(symbols))
+
+	for i, sym := range symbols {
+		require.NotNil(t, results[i].Quote, "slot %d should hold a quote", i)
+		assert.Equal(t, sym, results[i].Quote.Symbol, "result %d must match request order", i)
+	}
+}
+
+// A 10-symbol batch must run concurrently rather than serially: total time
+// should be far below sum-of-delays.
+func TestFetchQuotesRunsConcurrently(t *testing.T) {
+	prov := &echoProvider{delay: 50 * time.Millisecond}
+	svc := NewQuoteService(&stubCache{}, prov, prov)
+
+	symbols := make([]string, 10)
+	for i := range symbols {
+		symbols[i] = fmt.Sprintf("SY%d", i)
+	}
+
+	start := time.Now()
+	_, err := svc.FetchQuotes(context.Background(), symbols, quote.ResponseFormatText)
+	require.NoError(t, err)
+	// Serial would be ~500ms; concurrent should finish in roughly one delay.
+	assert.Less(t, time.Since(start), 250*time.Millisecond)
+}
+
 func TestBatchLimitExceeded(t *testing.T) {
 	prov := &stubProvider{q: makeStockQuote()}
 	svc := NewQuoteService(&stubCache{}, prov, prov)
