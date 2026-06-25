@@ -1,4 +1,4 @@
-module github.com/dmitriy/curlstreet
+module github.com/DmitriyRogo/curlstreet.sh
 
 go 1.25.9
 

@@ -1,7 +1,7 @@
 package quote
 
 import (
-	"github.com/dmitriy/curlstreet/assets"
+	"github.com/DmitriyRogo/curlstreet.sh/assets"
 	"gopkg.in/yaml.v3"
 )
 

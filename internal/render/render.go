@@ -3,7 +3,7 @@ package render
 import (
 	"fmt"
 
-	"github.com/dmitriy/curlstreet/internal/quote"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
 )
 
 func Render(format quote.ResponseFormat, quotes []quote.QuoteResult, events ...quote.EconEvent) (string, error) {

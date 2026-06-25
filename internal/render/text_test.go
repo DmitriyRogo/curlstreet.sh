@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"pgregory.net/rapid"
-	"github.com/dmitriy/curlstreet/internal/quote"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
 )
 
 func makeTestStockQuote(price, change, pct float64) *quote.Quote {

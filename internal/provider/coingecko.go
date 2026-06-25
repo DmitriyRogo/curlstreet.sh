@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dmitriy/curlstreet/internal/quote"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
 )
 
 type CoinGeckoProvider struct {
