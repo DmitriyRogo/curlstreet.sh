@@ -8,7 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gookit/color"
-	"github.com/dmitriy/curlstreet/internal/quote"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
 )
 
 var (

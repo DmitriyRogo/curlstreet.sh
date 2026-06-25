@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/dmitriy/curlstreet/internal/quote"
-	"github.com/dmitriy/curlstreet/internal/render"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/render"
 )
 
 var marketIndices = []struct {

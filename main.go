@@ -10,11 +10,11 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
-	"github.com/dmitriy/curlstreet/internal/cache"
-	"github.com/dmitriy/curlstreet/internal/config"
-	"github.com/dmitriy/curlstreet/internal/provider"
-	"github.com/dmitriy/curlstreet/internal/server"
-	"github.com/dmitriy/curlstreet/internal/service"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/cache"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/config"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/provider"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/server"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/service"
 )
 
 func main() {

@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dmitriy/curlstreet/assets"
-	"github.com/dmitriy/curlstreet/internal/quote"
+	"github.com/DmitriyRogo/curlstreet.sh/assets"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
 )
 
 var htmlTemplate = template.Must(template.New("base").Parse(string(assets.BaseHTML)))

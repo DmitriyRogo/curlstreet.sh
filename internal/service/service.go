@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dmitriy/curlstreet/internal/provider"
-	"github.com/dmitriy/curlstreet/internal/quote"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/provider"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
 )
 
 type QuoteCache interface {

@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/dmitriy/curlstreet/internal/quote"
-	"github.com/dmitriy/curlstreet/internal/service"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/service"
 )
 
 type QuoteServicer interface {

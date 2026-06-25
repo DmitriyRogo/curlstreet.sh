@@ -3,7 +3,7 @@ package provider
 import (
 	"context"
 
-	"github.com/dmitriy/curlstreet/internal/quote"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
 )
 
 type DataProvider interface {

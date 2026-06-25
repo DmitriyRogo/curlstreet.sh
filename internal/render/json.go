@@ -3,7 +3,7 @@ package render
 import (
 	"encoding/json"
 
-	"github.com/dmitriy/curlstreet/internal/quote"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
 )
 
 func RenderJSON(quotes []quote.QuoteResult) (string, error) {
