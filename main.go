@@ -45,8 +45,7 @@ func main() {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
-		_, err := finnhub.Fetch(ctx, "AAPL")
-		if err != nil {
+		if err := finnhub.Probe(ctx); err != nil {
 			log.WithError(err).Warn("finnhub connectivity probe failed")
 		} else {
 			log.Info("finnhub connectivity probe OK")
