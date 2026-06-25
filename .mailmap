@@ -1,0 +1,4 @@
+# Canonicalize commit identities so git tooling (git log, shortlog, GitHub)
+# always shows the GitHub noreply address and never a personal email.
+# Format: Canonical Name <canonical-email> <other-email-to-map>
+Dmitriy R <63629260+DmitriyRogo@users.noreply.github.com> <rogozhnikovdmitriy@yahoo.com>
