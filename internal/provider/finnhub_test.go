@@ -206,9 +206,13 @@ func TestFinnhubFetch_ServerError(t *testing.T) {
 }
 
 func TestFinnhubProvider_URLEncodesAPIKey(t *testing.T) {
+	var mu sync.Mutex
 	var capturedQueries []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Fetch fans out concurrent requests, so guard the shared slice.
+		mu.Lock()
 		capturedQueries = append(capturedQueries, r.URL.RawQuery)
+		mu.Unlock()
 		w.WriteHeader(http.StatusOK)
 		// Return minimal valid JSON for each endpoint
 		switch r.URL.Path {
