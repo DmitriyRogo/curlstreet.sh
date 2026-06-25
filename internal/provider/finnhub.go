@@ -81,6 +81,12 @@ type finnhubProfileResp struct {
 	GsubInd         string `json:"gsubInd"`
 }
 
+type finnhubETFProfileResp struct {
+	Profile struct {
+		Name string `json:"name"`
+	} `json:"profile"`
+}
+
 type fetchResult[T any] struct {
 	val T
 	err error
@@ -432,5 +438,39 @@ func (p *FinnhubProvider) fetchProfile(ctx context.Context, symbol string) (*fin
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&r); err != nil {
 		return nil, ErrProviderUnavailable
 	}
+
+	// ETFs and mutual funds return an empty profile from /stock/profile2.
+	// Fall back to the ETF-specific endpoint to get the name.
+	if r.Name == "" {
+		if name := p.fetchETFName(ctx, symbol); name != "" {
+			r.Name = name
+			if r.Type == "" {
+				r.Type = "ETF"
+			}
+		}
+	}
+
 	return &r, nil
+}
+
+func (p *FinnhubProvider) fetchETFName(ctx context.Context, symbol string) string {
+	params := url.Values{"symbol": {symbol}, "token": {p.apiKey}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/etf/profile?"+params.Encode(), nil)
+	if err != nil {
+		return ""
+	}
+	resp, err := p.client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		return ""
+	}
+	defer resp.Body.Close()
+
+	var r finnhubETFProfileResp
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&r); err != nil {
+		return ""
+	}
+	return r.Profile.Name
 }
