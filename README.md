@@ -1,33 +1,59 @@
-# curlstreet.sh
+<h1 align="center">curlstreet.sh</h1>
 
-Market data for your terminal — stocks, crypto, and economic calendar, straight from `curl`.
+<p align="center">
+  <strong>📈 The stock market in your terminal — stocks, crypto & the economic calendar, straight from <code>curl</code>.</strong>
+</p>
 
-```
-curl curlstreet.sh/AAPL
-curl curlstreet.sh/BTC,ETH
-curl curlstreet.sh/TSLA?format=json
-```
+<p align="center">
+  <img src=".github/demo.gif" alt="curlstreet.sh demo" width="700">
+</p>
 
-Inspired by [wttr.in](https://github.com/chubin/wttr.in). Terminals get ANSI color, browsers get a dark HTML view, and `?format=json` gives you clean machine-readable output. No signup, no rate limits for personal use.
+<p align="center">
+  <a href="#-quick-start">Quick Start</a> ·
+  <a href="#-usage">Usage</a> ·
+  <a href="#-features">Features</a> ·
+  <a href="#-development">Development</a>
+</p>
 
-## Usage
+---
 
-| | |
-|---|---|
-| `curl curlstreet.sh/AAPL` | Single stock quote |
-| `curl curlstreet.sh/BTC` | Crypto quote |
-| `curl curlstreet.sh/AAPL,MSFT,GOOG` | Batch up to 10 symbols |
-| `curl curlstreet.sh/AAPL?format=json` | JSON output |
-| Open in browser | Dark terminal theme with market overview |
-
-## Development
+## ⚡ Quick Start
 
 ```bash
-go test ./...
-go build ./...
-go vet ./...
+curl curlstreet.sh/AAPL          # 📊 a single stock quote
+curl curlstreet.sh/BTC,ETH       # 🪙 batch crypto in one shot
+curl curlstreet.sh/TSLA?format=json   # 🤖 clean JSON for your scripts
 ```
 
-## License
+No signup. No API key. No rate limits for personal use. Just `curl` and go.
 
-MIT
+> Inspired by [wttr.in](https://github.com/chubin/wttr.in) — terminals get crisp **ANSI color**, browsers get a **dark HTML view**, and `?format=json` hands you **machine-readable** output.
+
+## 🚀 Usage
+
+| Command | What you get |
+|---|---|
+| `curl curlstreet.sh/AAPL` | 📈 Single stock quote |
+| `curl curlstreet.sh/BTC` | 🪙 Crypto quote |
+| `curl curlstreet.sh/AAPL,MSFT,GOOG` | 🧺 Batch up to **10** symbols |
+| `curl curlstreet.sh/AAPL?format=json` | 🤖 JSON output for scripts |
+| Open in your **browser** | 🌙 Dark terminal theme with market overview |
+
+## ✨ Features
+
+- 🎨 **Smart formatting** — auto-detects your client. Terminal → ANSI, browser → HTML, scripts → JSON.
+- 💹 **Stocks _and_ crypto** — equities via Finnhub, coins via CoinGecko, one clean interface.
+- ⚡ **Fast** — built-in LRU caching keeps responses snappy.
+- 🪶 **Zero dependencies for you** — it's just `curl`. Works anywhere a terminal does.
+
+## 🛠 Development
+
+```bash
+go test ./...     # ✅ run the suite
+go build ./...    # 🔨 build it
+go vet ./...      # 🔍 lint it
+```
+
+## 📄 License
+
+MIT — go wild.
