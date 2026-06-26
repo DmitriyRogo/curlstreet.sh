@@ -235,6 +235,43 @@ func TestFinnhubFetch_ProfileFailureDegrades(t *testing.T) {
 	assert.Equal(t, "USD", q.Currency)
 }
 
+func TestFinnhubFetch_ETFNameViaSearch(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/quote", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"c": 72.92, "d": -2.03, "dp": -2.7, "h": 74.69, "l": 70.72})
+	})
+	// ETFs and mutual funds return an empty profile from /stock/profile2.
+	mux.HandleFunc("/stock/profile2", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{})
+	})
+	mux.HandleFunc("/stock/market-status", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"isOpen": true, "session": "regular"})
+	})
+	mux.HandleFunc("/stock/metric", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"metric": map[string]any{}})
+	})
+	mux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "TQQQ", r.URL.Query().Get("q"))
+		json.NewEncoder(w).Encode(map[string]any{
+			"count": 2,
+			"result": []map[string]any{
+				// Foreign listing first to verify we pick the exact-symbol match.
+				{"symbol": "TQQQ.TO", "description": "BETAPRO 3X NSDQ-100", "type": "ETP"},
+				{"symbol": "TQQQ", "description": "PROSHARES ULTRAPRO QQQ", "type": "ETP"},
+			},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second, testLogger)
+	q, err := p.Fetch(context.Background(), "TQQQ")
+
+	require.NoError(t, err)
+	assert.Equal(t, "PROSHARES ULTRAPRO QQQ", q.Name)
+	assert.Equal(t, "ETF", q.SecurityType)
+}
+
 func TestFinnhubProvider_URLEncodesAPIKey(t *testing.T) {
 	var mu sync.Mutex
 	var capturedQueries []string

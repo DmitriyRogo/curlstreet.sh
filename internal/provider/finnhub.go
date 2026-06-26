@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -85,10 +86,11 @@ type finnhubProfileResp struct {
 	GsubInd         string `json:"gsubInd"`
 }
 
-type finnhubETFProfileResp struct {
-	Profile struct {
-		Name string `json:"name"`
-	} `json:"profile"`
+type finnhubSearchResp struct {
+	Result []struct {
+		Symbol      string `json:"symbol"`
+		Description string `json:"description"`
+	} `json:"result"`
 }
 
 type fetchResult[T any] struct {
@@ -455,10 +457,11 @@ func (p *FinnhubProvider) fetchProfile(ctx context.Context, symbol string) (*fin
 		return nil, ErrProviderUnavailable
 	}
 
-	// ETFs and mutual funds return an empty profile from /stock/profile2.
-	// Fall back to the ETF-specific endpoint to get the name.
+	// ETFs and mutual funds return an empty profile from /stock/profile2
+	// (and the /etf/profile endpoint is premium-only). Fall back to the
+	// free-tier /search endpoint, which exposes the fund's description.
 	if r.Name == "" {
-		if name := p.fetchETFName(ctx, symbol); name != "" {
+		if name := p.fetchSearchName(ctx, symbol); name != "" {
 			r.Name = name
 			if r.Type == "" {
 				r.Type = "ETF"
@@ -469,24 +472,33 @@ func (p *FinnhubProvider) fetchProfile(ctx context.Context, symbol string) (*fin
 	return &r, nil
 }
 
-func (p *FinnhubProvider) fetchETFName(ctx context.Context, symbol string) string {
-	params := url.Values{"symbol": {symbol}, "token": {p.apiKey}}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/etf/profile?"+params.Encode(), nil)
+// fetchSearchName resolves a display name for symbols that /stock/profile2
+// does not cover (e.g. ETFs) via the free-tier /search endpoint. It returns
+// the description of the result whose symbol matches exactly, ignoring
+// foreign listings such as "TQQQ.TO".
+func (p *FinnhubProvider) fetchSearchName(ctx context.Context, symbol string) string {
+	params := url.Values{"q": {symbol}, "token": {p.apiKey}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/search?"+params.Encode(), nil)
 	if err != nil {
 		return ""
 	}
 	resp, err := p.client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		if resp != nil {
-			resp.Body.Close()
-		}
+	if err != nil {
 		return ""
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
 
-	var r finnhubETFProfileResp
+	var r finnhubSearchResp
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&r); err != nil {
 		return ""
 	}
-	return r.Profile.Name
+	for _, item := range r.Result {
+		if strings.EqualFold(item.Symbol, symbol) {
+			return item.Description
+		}
+	}
+	return ""
 }
