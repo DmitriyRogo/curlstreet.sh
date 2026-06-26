@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/singleflight"
 
+	"github.com/DmitriyRogo/curlstreet.sh/internal/metrics"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
 )
 
@@ -25,26 +26,29 @@ type FinnhubProvider struct {
 	apiKey  string
 	baseURL string
 	client  *http.Client
+	logger  *logrus.Logger
 
 	msMu    sync.Mutex
 	msCache map[string]marketStatusEntry
 	sf      singleflight.Group
 }
 
-func NewFinnhub(apiKey string, timeout time.Duration) *FinnhubProvider {
+func NewFinnhub(apiKey string, timeout time.Duration, logger *logrus.Logger) *FinnhubProvider {
 	return &FinnhubProvider{
 		apiKey:  apiKey,
 		baseURL: "https://finnhub.io/api/v1",
 		client:  &http.Client{Timeout: timeout},
+		logger:  logger,
 		msCache: make(map[string]marketStatusEntry),
 	}
 }
 
-func NewFinnhubWithBase(apiKey, baseURL string, timeout time.Duration) *FinnhubProvider {
+func NewFinnhubWithBase(apiKey, baseURL string, timeout time.Duration, logger *logrus.Logger) *FinnhubProvider {
 	return &FinnhubProvider{
 		apiKey:  apiKey,
 		baseURL: baseURL,
 		client:  &http.Client{Timeout: timeout},
+		logger:  logger,
 		msCache: make(map[string]marketStatusEntry),
 	}
 }
@@ -106,10 +110,13 @@ func (p *FinnhubProvider) Fetch(ctx context.Context, symbol string) (*quote.Quot
 	if qRes.err != nil {
 		return nil, qRes.err
 	}
+	qr := qRes.val
+
+	pr := pRes.val
 	if pRes.err != nil {
-		return nil, pRes.err
+		p.logger.WithError(pRes.err).WithField("symbol", symbol).Warn("finnhub profile unavailable, degrading")
+		pr = &finnhubProfileResp{}
 	}
-	qr, pr := qRes.val, pRes.val
 
 	if qr.C == 0 && qr.D == 0 {
 		return nil, ErrSymbolNotFound
@@ -297,19 +304,24 @@ func sanitizeNetErr(err error) error {
 }
 
 func (p *FinnhubProvider) fetchQuote(ctx context.Context, symbol string) (*finnhubQuoteResp, error) {
+	start := time.Now()
 	params := url.Values{"symbol": {symbol}, "token": {p.apiKey}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/quote?"+params.Encode(), nil)
 	if err != nil {
+		metrics.ProviderErrors.WithLabelValues("finnhub", "request_build").Inc()
 		return nil, ErrProviderUnavailable
 	}
 	resp, err := p.client.Do(req)
 	if err != nil {
+		metrics.ProviderErrors.WithLabelValues("finnhub", "connect").Inc()
 		return nil, ErrProviderUnavailable
 	}
 	defer resp.Body.Close()
+	metrics.ProviderRequestDuration.WithLabelValues("finnhub", "quote").Observe(time.Since(start).Seconds())
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("finnhub /quote status=%d", resp.StatusCode)
+		p.logger.WithField("status", resp.StatusCode).Warn("finnhub /quote error")
+		metrics.ProviderErrors.WithLabelValues("finnhub", "quote_http").Inc()
 		return nil, fmt.Errorf("finnhub /quote status %d: %w", resp.StatusCode, ErrProviderUnavailable)
 	}
 
@@ -321,6 +333,7 @@ func (p *FinnhubProvider) fetchQuote(ctx context.Context, symbol string) (*finnh
 }
 
 func (p *FinnhubProvider) fetchMetric(ctx context.Context, symbol string) (*finnhubMetricResp, error) {
+	start := time.Now()
 	params := url.Values{"symbol": {symbol}, "metric": {"all"}, "token": {p.apiKey}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/stock/metric?"+params.Encode(), nil)
 	if err != nil {
@@ -331,6 +344,7 @@ func (p *FinnhubProvider) fetchMetric(ctx context.Context, symbol string) (*finn
 		return nil, ErrProviderUnavailable
 	}
 	defer resp.Body.Close()
+	metrics.ProviderRequestDuration.WithLabelValues("finnhub", "metric").Observe(time.Since(start).Seconds())
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, ErrProviderUnavailable
@@ -419,6 +433,7 @@ func (p *FinnhubProvider) FetchEconomicCalendar(ctx context.Context) ([]quote.Ec
 }
 
 func (p *FinnhubProvider) fetchProfile(ctx context.Context, symbol string) (*finnhubProfileResp, error) {
+	start := time.Now()
 	params := url.Values{"symbol": {symbol}, "token": {p.apiKey}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+"/stock/profile2?"+params.Encode(), nil)
 	if err != nil {
@@ -429,6 +444,7 @@ func (p *FinnhubProvider) fetchProfile(ctx context.Context, symbol string) (*fin
 		return nil, ErrProviderUnavailable
 	}
 	defer resp.Body.Close()
+	metrics.ProviderRequestDuration.WithLabelValues("finnhub", "profile").Observe(time.Since(start).Seconds())
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, ErrProviderUnavailable
