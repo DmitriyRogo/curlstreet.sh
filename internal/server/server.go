@@ -3,10 +3,14 @@ package server
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
+	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/metrics"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/service"
 )
@@ -46,9 +50,10 @@ func New(svc *service.QuoteService, logger *logrus.Logger, requestsPerMinute, bu
 		s.prober = prober[0]
 	}
 	mux.HandleFunc("/health", s.handleHealth)
+	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/", s.handleQuote)
 	rl := newRateLimiter(requestsPerMinute, burst, trustedProxy)
-	s.handler = securityHeaders(rl.middleware(mux))
+	s.handler = s.requestLogger(securityHeaders(rl.middleware(mux)))
 	return s
 }
 
@@ -96,4 +101,36 @@ type computedCalendar struct{}
 
 func (c *computedCalendar) FetchEconomicCalendar(_ context.Context) ([]quote.EconEvent, error) {
 	return quote.UpcomingEconEvents(time.Now()), nil
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (s *Server) requestLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(sw, r)
+
+		duration := time.Since(start)
+		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+		statusStr := strconv.Itoa(sw.status)
+
+		metrics.HTTPRequestDuration.WithLabelValues(r.Method, r.URL.Path, statusStr).Observe(duration.Seconds())
+
+		s.logger.WithFields(logrus.Fields{
+			"method":  r.Method,
+			"path":    r.URL.Path,
+			"status":  sw.status,
+			"latency": duration.String(),
+			"ip":      ip,
+		}).Info("request")
+	})
 }

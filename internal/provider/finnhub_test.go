@@ -12,9 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var testLogger = logrus.New()
 
 func mockFinnhubServer(quoteBody, profileBody, marketStatusBody map[string]any) *httptest.Server {
 	return mockFinnhubServerWithMetric(quoteBody, profileBody, marketStatusBody,
@@ -46,7 +49,7 @@ func TestFinnhubFetch_Success(t *testing.T) {
 	)
 	defer srv.Close()
 
-	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second)
+	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second, testLogger)
 	q, err := p.Fetch(context.Background(), "AAPL")
 
 	require.NoError(t, err)
@@ -66,7 +69,7 @@ func TestFinnhubFetch_MarketClosed(t *testing.T) {
 	)
 	defer srv.Close()
 
-	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second)
+	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second, testLogger)
 	q, err := p.Fetch(context.Background(), "AAPL")
 
 	require.NoError(t, err)
@@ -82,7 +85,7 @@ func TestFinnhubFetch_PreMarket(t *testing.T) {
 	)
 	defer srv.Close()
 
-	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second)
+	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second, testLogger)
 	q, err := p.Fetch(context.Background(), "AAPL")
 
 	require.NoError(t, err)
@@ -98,7 +101,7 @@ func TestFinnhubFetch_AfterHours(t *testing.T) {
 	)
 	defer srv.Close()
 
-	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second)
+	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second, testLogger)
 	q, err := p.Fetch(context.Background(), "AAPL")
 
 	require.NoError(t, err)
@@ -123,7 +126,7 @@ func TestFinnhubFetch_MarketStatusFallbackOnError(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second)
+	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second, testLogger)
 	q, err := p.Fetch(context.Background(), "AAPL")
 
 	require.NoError(t, err)
@@ -140,7 +143,7 @@ func TestFinnhubFetch_MarketCapAnd52W(t *testing.T) {
 	)
 	defer srv.Close()
 
-	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second)
+	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second, testLogger)
 	q, err := p.Fetch(context.Background(), "AAPL")
 
 	require.NoError(t, err)
@@ -170,7 +173,7 @@ func TestFinnhubFetch_52WFallsBackToIntradayOnMetricError(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second)
+	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second, testLogger)
 	q, err := p.Fetch(context.Background(), "AAPL")
 
 	require.NoError(t, err)
@@ -187,7 +190,7 @@ func TestFinnhubFetch_SymbolNotFound(t *testing.T) {
 	)
 	defer srv.Close()
 
-	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second)
+	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second, testLogger)
 	_, err := p.Fetch(context.Background(), "XXXX")
 
 	assert.ErrorIs(t, err, ErrSymbolNotFound)
@@ -199,10 +202,37 @@ func TestFinnhubFetch_ServerError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second)
+	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second, testLogger)
 	_, err := p.Fetch(context.Background(), "AAPL")
 
 	assert.ErrorIs(t, err, ErrProviderUnavailable)
+}
+
+func TestFinnhubFetch_ProfileFailureDegrades(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/quote", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"c": 189.45, "d": 1.23, "dp": 0.65, "h": 191.0, "l": 187.5})
+	})
+	mux.HandleFunc("/stock/profile2", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	mux.HandleFunc("/stock/market-status", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"isOpen": true, "session": "regular"})
+	})
+	mux.HandleFunc("/stock/metric", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"metric": map[string]any{"52WeekHigh": 200.0, "52WeekLow": 150.0}})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second, testLogger)
+	q, err := p.Fetch(context.Background(), "AAPL")
+
+	require.NoError(t, err)
+	assert.Equal(t, "AAPL", q.Symbol)
+	assert.Equal(t, "", q.Name)
+	assert.InDelta(t, 189.45, q.Price, 0.001)
+	assert.Equal(t, "USD", q.Currency)
 }
 
 func TestFinnhubProvider_URLEncodesAPIKey(t *testing.T) {
@@ -229,7 +259,7 @@ func TestFinnhubProvider_URLEncodesAPIKey(t *testing.T) {
 	defer srv.Close()
 
 	// API key contains characters that must be percent-encoded
-	p := NewFinnhubWithBase("key+with&special=chars", srv.URL, 5*time.Second)
+	p := NewFinnhubWithBase("key+with&special=chars", srv.URL, 5*time.Second, testLogger)
 	p.Fetch(context.Background(), "AAPL") //nolint:errcheck
 
 	for _, q := range capturedQueries {
@@ -257,7 +287,7 @@ func TestFinnhubProvider_MarketStatusSingleFlight(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second)
+	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second, testLogger)
 
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -281,7 +311,7 @@ func TestFinnhubProvider_OversizedBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second)
+	p := NewFinnhubWithBase("testkey", srv.URL, 5*time.Second, testLogger)
 	_, err := p.Fetch(context.Background(), "AAPL")
 	require.Error(t, err, "oversized body should return an error")
 }
@@ -293,7 +323,7 @@ func TestFinnhubFetch_Timeout(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewFinnhubWithBase("testkey", srv.URL, 50*time.Millisecond)
+	p := NewFinnhubWithBase("testkey", srv.URL, 50*time.Millisecond, testLogger)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 

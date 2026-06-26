@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/cache"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/config"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/metrics"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/provider"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/server"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/service"
@@ -20,6 +21,7 @@ import (
 func main() {
 	log := logrus.New()
 	log.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
+	metrics.Register()
 
 	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
 		log.WithError(err).Warn("failed to parse .env file")
@@ -37,7 +39,7 @@ func main() {
 
 	log.WithField("finnhub_key_set", cfg.Finnhub.APIKey != "").Info("provider config")
 
-	finnhub := provider.NewFinnhub(cfg.Finnhub.APIKey, cfg.Finnhub.Timeout)
+	finnhub := provider.NewFinnhub(cfg.Finnhub.APIKey, cfg.Finnhub.Timeout, log)
 	coinGecko := provider.NewCoinGecko(cfg.CoinGecko.Timeout)
 
 	// Startup connectivity probe — logs whether Finnhub is reachable so

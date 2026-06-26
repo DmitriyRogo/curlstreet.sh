@@ -4,6 +4,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/metrics"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
 )
 
@@ -40,12 +41,15 @@ func NewWithClock(capacity int, ttl time.Duration, timeFn func() time.Time) (*Qu
 func (c *QuoteCache) Get(symbol string) (*quote.Quote, bool) {
 	e, ok := c.lru.Get(symbol)
 	if !ok {
+		metrics.CacheOps.WithLabelValues("miss").Inc()
 		return nil, false
 	}
 	if e.expiresAt.Before(c.timeFn()) {
 		c.lru.Remove(symbol)
+		metrics.CacheOps.WithLabelValues("miss").Inc()
 		return nil, false
 	}
+	metrics.CacheOps.WithLabelValues("hit").Inc()
 	return cloneQuote(e.quote), true
 }
 

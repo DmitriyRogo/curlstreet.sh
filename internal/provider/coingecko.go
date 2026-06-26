@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/DmitriyRogo/curlstreet.sh/internal/metrics"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
 )
 
@@ -49,19 +50,24 @@ func (p *CoinGeckoProvider) Fetch(ctx context.Context, symbol string) (*quote.Qu
 		return nil, ErrSymbolNotFound
 	}
 
+	start := time.Now()
 	url := fmt.Sprintf("%s/coins/markets?vs_currency=usd&ids=%s", p.baseURL, geckoID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
+		metrics.ProviderErrors.WithLabelValues("coingecko", "request_build").Inc()
 		return nil, ErrProviderUnavailable
 	}
 
 	resp, err := p.client.Do(req)
 	if err != nil {
+		metrics.ProviderErrors.WithLabelValues("coingecko", "connect").Inc()
 		return nil, ErrProviderUnavailable
 	}
 	defer resp.Body.Close()
+	metrics.ProviderRequestDuration.WithLabelValues("coingecko", "markets").Observe(time.Since(start).Seconds())
 
 	if resp.StatusCode != http.StatusOK {
+		metrics.ProviderErrors.WithLabelValues("coingecko", "markets_http").Inc()
 		return nil, ErrProviderUnavailable
 	}
 
