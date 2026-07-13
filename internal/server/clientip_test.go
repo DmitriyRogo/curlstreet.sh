@@ -10,6 +10,8 @@ import (
 )
 
 func TestClientIP_FlyClientIPWinsOverEverything(t *testing.T) {
+	t.Setenv("FLY_APP_NAME", "curlstreet-sh")
+
 	r := httptest.NewRequest(http.MethodGet, "/AAPL", nil)
 	r.RemoteAddr = "10.0.0.5:1234"
 	r.Header.Set("Fly-Client-IP", "203.0.113.9")
@@ -19,7 +21,19 @@ func TestClientIP_FlyClientIPWinsOverEverything(t *testing.T) {
 	assert.Equal(t, "203.0.113.9", clientIP(r, trustedNet))
 }
 
+func TestClientIP_FlyClientIPIgnoredWhenNotOnFly(t *testing.T) {
+	t.Setenv("FLY_APP_NAME", "")
+
+	r := httptest.NewRequest(http.MethodGet, "/AAPL", nil)
+	r.RemoteAddr = "203.0.113.5:1234"
+	r.Header.Set("Fly-Client-IP", "9.9.9.9") // attacker-supplied, must be ignored off-Fly
+
+	assert.Equal(t, "203.0.113.5", clientIP(r, nil))
+}
+
 func TestClientIP_TrustedProxyXFFFallback(t *testing.T) {
+	t.Setenv("FLY_APP_NAME", "")
+
 	r := httptest.NewRequest(http.MethodGet, "/AAPL", nil)
 	r.RemoteAddr = "10.0.0.5:1234" // inside the trusted CIDR
 	r.Header.Set("X-Forwarded-For", "198.51.100.1, 10.0.0.5")
@@ -29,6 +43,8 @@ func TestClientIP_TrustedProxyXFFFallback(t *testing.T) {
 }
 
 func TestClientIP_UntrustedRemoteIgnoresXFF(t *testing.T) {
+	t.Setenv("FLY_APP_NAME", "")
+
 	r := httptest.NewRequest(http.MethodGet, "/AAPL", nil)
 	r.RemoteAddr = "203.0.113.5:1234" // NOT inside the trusted CIDR
 	r.Header.Set("X-Forwarded-For", "198.51.100.1")
@@ -38,6 +54,8 @@ func TestClientIP_UntrustedRemoteIgnoresXFF(t *testing.T) {
 }
 
 func TestClientIP_NoTrustedProxyFallsBackToRemoteAddr(t *testing.T) {
+	t.Setenv("FLY_APP_NAME", "")
+
 	r := httptest.NewRequest(http.MethodGet, "/AAPL", nil)
 	r.RemoteAddr = "203.0.113.5:1234"
 

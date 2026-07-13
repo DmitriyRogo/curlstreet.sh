@@ -3,8 +3,18 @@ package server
 import (
 	"net"
 	"net/http"
+	"os"
 	"strings"
 )
+
+// isFlyEnvironment reports whether this process is running as a fly.io app.
+// fly.io sets FLY_APP_NAME on every deployed machine; its presence means
+// fly-proxy is the sole ingress path (this repo's fly.toml defines no raw
+// TCP passthrough), so fly-proxy — never an external client — is the only
+// thing that can be setting Fly-Client-IP.
+func isFlyEnvironment() bool {
+	return os.Getenv("FLY_APP_NAME") != ""
+}
 
 // parseTrustedProxy parses cidr into a *net.IPNet, or nil when cidr is empty
 // or invalid (invalid input disables trusted-proxy handling rather than
@@ -22,13 +32,18 @@ func parseTrustedProxy(cidr string) *net.IPNet {
 
 // clientIP resolves the real client address for a request. Priority:
 //  1. Fly-Client-IP — the authoritative client IP fly.io's edge proxy sets on
-//     every request; always trusted when present.
+//     every request, but only trusted when isFlyEnvironment reports we're
+//     actually running behind fly-proxy. Outside that environment this
+//     header is fully attacker-controlled, and trusting it would let a
+//     client spoof its identity to bypass IP-based rate limiting.
 //  2. X-Forwarded-For's leftmost entry, but only when RemoteAddr falls inside
 //     trustedNet (a reverse proxy we trust to set that header honestly).
 //  3. RemoteAddr as a last resort.
 func clientIP(r *http.Request, trustedNet *net.IPNet) string {
-	if fly := r.Header.Get("Fly-Client-IP"); fly != "" {
-		return fly
+	if isFlyEnvironment() {
+		if fly := r.Header.Get("Fly-Client-IP"); fly != "" {
+			return fly
+		}
 	}
 
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
