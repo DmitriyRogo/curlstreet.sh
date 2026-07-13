@@ -54,6 +54,10 @@ go build ./...    # 🔨 build it
 go vet ./...      # 🔍 lint it
 ```
 
+## Acknowledgments
+
+IP geolocation data by [DB-IP](https://db-ip.com) (DB-IP City Lite, CC-BY 4.0).
+
 ## 📄 License
 
 MIT — go wild.

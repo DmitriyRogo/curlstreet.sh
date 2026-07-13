@@ -10,6 +10,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/geo"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/metrics"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/quote"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/service"
@@ -38,21 +39,24 @@ type Server struct {
 	svc           QuoteServicer
 	calendar      CalendarFetcher // nil → static fallback events
 	prober        Prober          // nil → health check skips provider probe
+	locator       geo.Locator     // nil → geo enrichment skipped
 	handler       http.Handler
 	logger        *logrus.Logger
+	trustedNet    *net.IPNet
 	marketTimeout time.Duration // 0 → defaultMarketOverviewTimeout
 }
 
-func New(svc *service.QuoteService, logger *logrus.Logger, requestsPerMinute, burst int, trustedProxy string, calendar CalendarFetcher, prober ...Prober) *Server {
+func New(svc *service.QuoteService, logger *logrus.Logger, requestsPerMinute, burst int, trustedProxy string, calendar CalendarFetcher, locator geo.Locator, prober ...Prober) *Server {
 	mux := http.NewServeMux()
-	s := &Server{svc: svc, calendar: calendar, logger: logger, marketTimeout: defaultMarketOverviewTimeout}
+	trustedNet := parseTrustedProxy(trustedProxy)
+	s := &Server{svc: svc, calendar: calendar, logger: logger, locator: locator, trustedNet: trustedNet, marketTimeout: defaultMarketOverviewTimeout}
 	if len(prober) > 0 {
 		s.prober = prober[0]
 	}
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/", s.handleQuote)
-	rl := newRateLimiter(requestsPerMinute, burst, trustedProxy)
+	rl := newRateLimiter(requestsPerMinute, burst, trustedNet)
 	s.handler = s.requestLogger(securityHeaders(rl.middleware(mux)))
 	return s
 }
@@ -120,17 +124,36 @@ func (s *Server) requestLogger(next http.Handler) http.Handler {
 		next.ServeHTTP(sw, r)
 
 		duration := time.Since(start)
-		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+		ip := clientIP(r, s.trustedNet)
 		statusStr := strconv.Itoa(sw.status)
 
 		metrics.HTTPRequestDuration.WithLabelValues(r.Method, r.URL.Path, statusStr).Observe(duration.Seconds())
 
-		s.logger.WithFields(logrus.Fields{
+		fields := logrus.Fields{
 			"method":  r.Method,
 			"path":    r.URL.Path,
 			"status":  sw.status,
 			"latency": duration.String(),
-			"ip":      ip,
-		}).Info("request")
+			"ip":      maskIP(ip),
+		}
+
+		// Geo enrichment only fires on the quote route. Go's ServeMux routes
+		// every path not matched by "/health" or "/metrics" to the "/"
+		// pattern (which serves quote lookups like "/AAPL"), but leaves
+		// r.URL.Path as the actual requested path — so a literal
+		// r.URL.Path == "/" check here would never match a real symbol
+		// lookup. Exclude the two known non-quote routes instead.
+		if s.locator != nil && r.URL.Path != "/health" && r.URL.Path != "/metrics" {
+			if loc, ok := s.locator.Lookup(ip); ok {
+				fields["country"] = loc.Country
+				fields["city"] = loc.City
+				fields["region"] = loc.Region
+				fields["lat"] = loc.Lat
+				fields["lon"] = loc.Lon
+				metrics.RequestsByCountry.WithLabelValues(loc.Country, loc.Continent).Inc()
+			}
+		}
+
+		s.logger.WithFields(fields).Info("request")
 	})
 }

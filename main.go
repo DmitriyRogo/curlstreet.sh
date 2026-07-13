@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/cache"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/config"
+	"github.com/DmitriyRogo/curlstreet.sh/internal/geo"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/metrics"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/provider"
 	"github.com/DmitriyRogo/curlstreet.sh/internal/server"
@@ -55,7 +56,20 @@ func main() {
 	}()
 
 	svc := service.NewQuoteService(quoteCache, finnhub, coinGecko)
-	srv := server.New(svc, log, cfg.RateLimit.RequestsPerMinute, cfg.RateLimit.Burst, cfg.Server.TrustedProxy, server.ComputedCalendar(), finnhub)
+
+	// A missing or unreadable geo database disables geolocation rather than
+	// failing startup — see the db_path comment in config.yaml.
+	var locator geo.Locator = geo.NopLocator{}
+	if cfg.Geo.DBPath != "" {
+		if l, err := geo.NewMMDBLocator(cfg.Geo.DBPath); err != nil {
+			log.WithError(err).Warn("geo database unavailable, disabling geolocation")
+		} else {
+			locator = l
+			defer l.Close()
+		}
+	}
+
+	srv := server.New(svc, log, cfg.RateLimit.RequestsPerMinute, cfg.RateLimit.Burst, cfg.Server.TrustedProxy, server.ComputedCalendar(), locator, finnhub)
 
 	httpSrv := &http.Server{
 		Addr:         cfg.Server.Addr,
