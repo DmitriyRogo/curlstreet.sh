@@ -140,7 +140,7 @@ func TestHandleQuote_CacheHitHeader(t *testing.T) {
 }
 
 func TestRateLimiter_TrustedProxyUsesXFF(t *testing.T) {
-	rl := newRateLimiter(60, 100, "127.0.0.1/32")
+	rl := newRateLimiter(60, 100, parseTrustedProxy("127.0.0.1/32"))
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
