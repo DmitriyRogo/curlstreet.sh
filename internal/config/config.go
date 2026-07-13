@@ -29,6 +29,9 @@ type Config struct {
 		RequestsPerMinute int `yaml:"requests_per_minute"`
 		Burst             int `yaml:"burst"`
 	} `yaml:"rate_limit"`
+	Geo struct {
+		DBPath string `yaml:"db_path"` // path to a DB-IP/GeoIP2 City MMDB; empty or missing file disables geolocation
+	} `yaml:"geo"`
 }
 
 func Load(path string) (*Config, error) {
@@ -42,6 +45,7 @@ func Load(path string) (*Config, error) {
 	cfg.CoinGecko.Timeout = 5 * time.Second
 	cfg.RateLimit.RequestsPerMinute = 60
 	cfg.RateLimit.Burst = 10
+	cfg.Geo.DBPath = "/data/dbip-city-lite.mmdb"
 
 	f, err := os.Open(path)
 	if err != nil {
