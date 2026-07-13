@@ -36,6 +36,14 @@ var (
 		},
 		[]string{"provider", "error"},
 	)
+
+	RequestsByCountry = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "curlstreet_requests_by_country_total",
+			Help: "Quote-endpoint requests by resolved client country and continent.",
+		},
+		[]string{"country", "continent"},
+	)
 )
 
 func Register() {
@@ -44,5 +52,6 @@ func Register() {
 		CacheOps,
 		ProviderRequestDuration,
 		ProviderErrors,
+		RequestsByCountry,
 	)
 }
